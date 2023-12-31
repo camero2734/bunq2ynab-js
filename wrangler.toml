@@ -1,0 +1,11 @@
+name = "bunq2ynab"
+main = "dist/index.js"
+compatibility_date = "2023-12-31"
+
+workers_dev = true
+
+[build]
+command = "bun run build"
+
+[triggers]
+crons = [ "18 2 * * *" ]
