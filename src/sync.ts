@@ -19,10 +19,8 @@ export async function syncTransactionsForAccount(params: SyncParams) {
   const ynabAccount = ynabAccountsByIban.get(bunqAccount.alias.find(alias => alias.type === 'IBAN')?.value!);
   if (!ynabAccount) throw new Error(`Could not find YNAB account for ${bunqAccount.description}`);
 
-  const transactions = await bunq.user.listAllPaymentForUserMonetaryAccount(bunq.userId, bunqAccount.id, { query: { count: 200 } } as any);
-  const mappedTxs = transactions.data
-    .sort((a, b) => a.Payment.created!.localeCompare(b.Payment.created!))
-    .map(tx => mapBunqToYnabTransaction(tx.Payment, ynabAccount));
+  const transactions = await bunq.user.listAllPaymentForUserMonetaryAccount(bunq.userId, bunqAccount.id, { query: { count: 15 } } as any);
+  const mappedTxs = transactions.data.map(tx => mapBunqToYnabTransaction(tx.Payment, ynabAccount));
 
   const saveResponse = await ynab.transactions.createTransactions(ynabBudget.id, { transactions: mappedTxs });
 
@@ -33,9 +31,10 @@ function mapBunqToYnabTransaction(tx: PaymentListing, ynabAccount: YNAB.Account)
   if (!tx.amount?.value) throw new Error(`Transaction ${tx.id} has no amount`);
   if (!tx.created) throw new Error(`Transaction ${tx.id} has no created date`);
   if (!tx.counterparty_alias) throw new Error(`Transaction ${tx.id} has no counterparty_alias`);
+  if (!tx.id) throw new Error(`Transaction ${tx.id} has no id`);
 
   const amount = Math.round(+tx.amount.value * 1000); // YNAB uses milliunits
-  const date = new Date(tx.created).toISOString().slice(0, 10);
+  const date = tx.created.slice(0, 10);
   const payeeName = tx.counterparty_alias.display_name;
 
   let payeeId: string | undefined;
@@ -43,13 +42,6 @@ function mapBunqToYnabTransaction(tx: PaymentListing, ynabAccount: YNAB.Account)
     const counterpartyIBAN = tx.counterparty_alias.iban;
     payeeId = ynabAccountsByIban.get(counterpartyIBAN)?.transfer_payee_id || undefined;
   }
-
-  const partialImportId = `YNAB:${amount}:${date}`;
-
-  const occurrence = (occurenceCount.get(partialImportId) || 0) + 1;
-  occurenceCount.set(partialImportId, occurrence);
-
-  const importId = `${partialImportId}:${occurrence}`;
 
   return {
     account_id: ynabAccount.id,
@@ -59,6 +51,6 @@ function mapBunqToYnabTransaction(tx: PaymentListing, ynabAccount: YNAB.Account)
     payee_id: payeeId,
     memo: tx.description?.slice(0, 100),
     cleared: 'cleared',
-    import_id: importId,
+    import_id: 'bunq.in:' + tx.id,
   };
 }

@@ -30,6 +30,8 @@ export default {
       const ynabAccounts = await ynab.accounts.getAccounts(budget.id);
       for (const bunqAccount of accounts) {
         for (const ynabAccount of ynabAccounts.data.accounts) {
+          if (bunqAccount.status !== 'ACTIVE') continue;
+
           if (ynabAccount.name === bunqAccount.description) {
             const iban = bunqAccount.alias.find(alias => alias.type === 'IBAN')?.value;
             if (!iban) throw new Error(`Could not find IBAN for ${bunqAccount.description}`);
