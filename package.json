@@ -4,11 +4,13 @@
   "type": "module",
   "scripts": {
     "build": "bun build --target=browser --outdir=dist index.ts",
-    "dev": "bunx wrangler dev --test-scheduled"
+    "dev": "bunx wrangler dev --test-scheduled",
+    "bunq:swagger:client": "swagger-typescript-api -p src/bunq/swagger.json -o src/bunq"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20231218.0",
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "swagger-typescript-api": "^13.0.3"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
