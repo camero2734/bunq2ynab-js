@@ -17711,7 +17711,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      */
     listAllPaymentForUserMonetaryAccount: (userId: number, monetaryAccountId: number, params: RequestParams = {}) =>
       this.request<
-        PaymentListing[],
+        Record<'Payment', PaymentListing>[],
         {
           Error?: Error;
         }

@@ -1,8 +1,10 @@
 import { Api } from "./Api";
 
+export type BunqApi<T = unknown> = Api<T> & { userId: number };
+
 const ENDPOINT = 'https://api.bunq.com/v1';
 
-export async function createClient(apiToken: string) {
+export async function createClient(apiToken: string): Promise<BunqApi> {
   const keyPair = await crypto.subtle.generateKey(
     { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
     true, ['sign']
@@ -17,7 +19,7 @@ export async function createClient(apiToken: string) {
 
   const { data: installationData } = await api.installation.createInstallation({
     client_public_key: pemExported,
-  });
+  }, { mergeResponse: true } as any);
 
   const publicIp = await getPublicIp();
 
@@ -28,16 +30,19 @@ export async function createClient(apiToken: string) {
     description: 'bunq2ynab-js on cloudflare workers',
     secret: apiToken,
     permitted_ips: [publicIp],
-  });
+  }, { mergeResponse: true } as any);
 
   const { data: sessionData } = await api.sessionServer.createSessionServer({
     secret: apiToken,
-  });
+  }, { mergeResponse: true } as any);
 
-  if (!sessionData.Token?.token) throw new Error('Could not create session');
+  if (!sessionData.Token?.token || !sessionData.UserPerson?.id) throw new Error('Could not create session');
   updateAuthToken(sessionData.Token.token);
 
-  return api;
+  let bunqApi = api as BunqApi;
+  bunqApi.userId = sessionData.UserPerson.id;
+
+  return bunqApi;
 }
 
 function createSwaggerApi(privateKey: CryptoKey, token?: string): [Api<unknown>, (newAuthToken: string) => void] {
@@ -50,7 +55,8 @@ function createSwaggerApi(privateKey: CryptoKey, token?: string): [Api<unknown>,
       credentials: undefined // Credentials option doesn't work in Cloudflare Workers
     },
 
-    customFetch: async (input: RequestInfo, init?: RequestInit) => {
+    customFetch: async (info: RequestInfo, init?: RequestInit) => {
+      console.log(`Making request to ${info}`);
       // Request signature
       const signature = await generateSignature(init?.body, privateKey);
 
@@ -61,15 +67,15 @@ function createSwaggerApi(privateKey: CryptoKey, token?: string): [Api<unknown>,
         ...(clientAuthToken ? { 'X-Bunq-Client-Authentication': clientAuthToken } : {}),
       };
 
-      console.log(init.headers, /HEADERS/);
-
-      const response = await fetch(input, init);
+      const response = await fetch(info, init);
       let data = await response.json() as { Response?: any[] };
 
       // For some reason, Bunq's swagger schema doesn't match the actual API -- it returns
       // an array of objects instead of an object with keys. This is a workaround for that.
-      if (Array.isArray(data.Response)) {
+      if ((init as any)?.mergeResponse && Array.isArray(data.Response)) {
         data = Object.assign({}, ...data.Response);
+      } else {
+        data = data.Response as any;
       }
 
       return new Response(JSON.stringify(data), response as unknown as Bun.ResponseInit);
