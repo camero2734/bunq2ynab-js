@@ -4,8 +4,13 @@ compatibility_date = "2023-12-31"
 
 workers_dev = true
 
+kv_namespaces = [
+  { binding = "bunq2ynab", id = "20a325ee35d54fa8b8a0d3563e5e377e" }
+]
+
+
 [build]
 command = "bun run build"
 
 [triggers]
-crons = [ "18 2 * * *" ]
+crons = [ "*/15 * * * *" ]

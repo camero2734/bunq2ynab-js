@@ -7,16 +7,18 @@ import { matchedAccounts, occurenceCount, syncTransactionsForAccount, ynabAccoun
 interface EnvironmentVars {
   BUNQ_API_KEY: string;
   YNAB_API_KEY: string;
+  ENV?: string;
+  bunq2ynab: KVNamespace;
 }
 
 export default {
-  async fetch(request: Request, env: EnvironmentVars): Promise<Response> {
+  async scheduled(_controller: ScheduledController, env: EnvironmentVars): Promise<void> {
     try {
       matchedAccounts.clear();
       occurenceCount.clear();
       ynabAccountsByIban.clear();
 
-      const bunq = await createClient(env.BUNQ_API_KEY);
+      const bunq = await createClient(env.BUNQ_API_KEY, env.bunq2ynab, env.ENV === 'development');
       const ynab = new YNAB.API(env.YNAB_API_KEY);
       const budget = (await ynab.budgets.getBudgets()).data.budgets[0];
 
@@ -43,10 +45,10 @@ export default {
         await syncTransactionsForAccount({ bunq, ynab, bunqAccount, ynabBudget: budget });
       }
 
-      return Response.json({ message: 'ok!' });
+      console.log("Done!");
     } catch (e) {
-      if (e instanceof Response && !e.bodyUsed) return e;
       console.log(e, /ERROR/);
+      if (e instanceof Response) console.log(await e.text());
       throw e;
     }
   },

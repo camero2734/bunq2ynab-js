@@ -5,7 +5,9 @@
   "scripts": {
     "build": "bun build --target=browser --outdir=dist index.ts",
     "dev": "bunx wrangler dev --test-scheduled",
-    "bunq:swagger:client": "swagger-typescript-api -p src/bunq/swagger.json -o src/bunq"
+    "bunq:swagger:client": "swagger-typescript-api -p src/bunq/swagger.json -o src/bunq",
+    "publish": "bunx wrangler deploy",
+    "logs": "bunx wrangler tail --format=pretty"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20231218.0",

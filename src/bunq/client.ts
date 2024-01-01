@@ -3,8 +3,18 @@ import { Api } from "./Api";
 export type BunqApi<T = unknown> = Api<T> & { userId: number };
 
 const ENDPOINT = 'https://api.bunq.com/v1';
+const TOKEN_CACHE_KEY = 'sessionToken';
+const USER_ID_CACHE_KEY = 'userId';
 
-export async function createClient(apiToken: string): Promise<BunqApi> {
+export async function createClient(apiToken: string, kvCache: KVNamespace, isDev = false): Promise<BunqApi> {
+  const cachedToken = await kvCache.get(TOKEN_CACHE_KEY);
+  const userId = await kvCache.get(USER_ID_CACHE_KEY);
+
+  if (cachedToken && userId) {
+    console.log('Using cached token and user ID');
+    return cachedClient(cachedToken, userId);
+  }
+
   const keyPair = await crypto.subtle.generateKey(
     { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
     true, ['sign']
@@ -27,7 +37,7 @@ export async function createClient(apiToken: string): Promise<BunqApi> {
   updateAuthToken(installationData.Token?.token);
 
   await api.deviceServer.createDeviceServer({
-    description: 'bunq2ynab-js on cloudflare workers',
+    description: `bunq2ynab-js on cloudflare workers${isDev ? ' (dev)' : ''}`,
     secret: apiToken,
     permitted_ips: [publicIp],
   }, { mergeResponse: true } as any);
@@ -42,10 +52,23 @@ export async function createClient(apiToken: string): Promise<BunqApi> {
   let bunqApi = api as BunqApi;
   bunqApi.userId = sessionData.UserPerson.id;
 
+  console.log('Caching token and user ID');
+  await kvCache.put(TOKEN_CACHE_KEY, sessionData.Token.token, { expirationTtl: 86400 });
+  await kvCache.put(USER_ID_CACHE_KEY, String(sessionData.UserPerson.id), { expirationTtl: 86400 });
+
   return bunqApi;
 }
 
-function createSwaggerApi(privateKey: CryptoKey, token?: string): [Api<unknown>, (newAuthToken: string) => void] {
+export async function cachedClient(token: string, userId: string): Promise<BunqApi> {
+  // We don't need the private key, as no requests we make need to be signed
+  const [api] = createSwaggerApi(undefined, token);
+
+  let bunqApi = api as BunqApi;
+  bunqApi.userId = Number(userId);
+  return bunqApi;
+}
+
+function createSwaggerApi(privateKey?: CryptoKey, token?: string): [Api<unknown>, (newAuthToken: string) => void] {
   let clientAuthToken = token;
   const updateAuthToken = (newAuthToken: string) => clientAuthToken = newAuthToken;
 
@@ -58,12 +81,12 @@ function createSwaggerApi(privateKey: CryptoKey, token?: string): [Api<unknown>,
     customFetch: async (info: RequestInfo, init?: RequestInit) => {
       console.log(`Making request to ${info}`);
       // Request signature
-      const signature = await generateSignature(init?.body, privateKey);
+      const signature = privateKey && await generateSignature(init?.body, privateKey);
 
       init ||= {};
       init.headers = {
         ...(init.headers || {}),
-        'X-Bunq-Client-Signature': signature,
+        ...(signature ? { 'X-Bunq-Client-Signature': signature } : {}),
         ...(clientAuthToken ? { 'X-Bunq-Client-Authentication': clientAuthToken } : {}),
       };
 
