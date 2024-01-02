@@ -13,4 +13,4 @@ kv_namespaces = [
 command = "bun run build"
 
 [triggers]
-crons = [ "*/5 * * * *" ]
+crons = [ "8-59/10 * * * *" ]
