@@ -7,6 +7,7 @@ import { matchedAccounts, occurenceCount, syncTransactionsForAccount, ynabAccoun
 interface EnvironmentVars {
   BUNQ_API_KEY: string;
   YNAB_API_KEY: string;
+  NUMBER_OF_TRANSACTIONS_TO_SYNC?: string;
   ENV?: string;
   bunq2ynab: KVNamespace;
 }
@@ -17,6 +18,8 @@ export default {
       matchedAccounts.clear();
       occurenceCount.clear();
       ynabAccountsByIban.clear();
+
+      const numberOfTransactions = env.NUMBER_OF_TRANSACTIONS_TO_SYNC ? +env.NUMBER_OF_TRANSACTIONS_TO_SYNC : undefined;
 
       const bunq = await createClient(env.BUNQ_API_KEY, env.bunq2ynab, env.ENV === 'development');
       const ynab = new YNAB.API(env.YNAB_API_KEY);
@@ -48,7 +51,7 @@ export default {
       for (const bunqAccount of accounts) {
         if (bunqAccount.status !== 'ACTIVE') continue;
         console.log(`Syncing ${bunqAccount.description}`);
-        await syncTransactionsForAccount({ bunq, ynab, bunqAccount, ynabBudget: budget });
+        await syncTransactionsForAccount({ bunq, ynab, bunqAccount, ynabBudget: budget, numberOfTransactions });
       }
 
       console.log("Done!");

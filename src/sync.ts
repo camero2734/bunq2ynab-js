@@ -7,6 +7,7 @@ interface SyncParams {
   ynab: YNAB.API;
   bunqAccount: Required<MonetaryAccountBank>;
   ynabBudget: YNAB.BudgetSummary;
+  numberOfTransactions?: number;
 }
 
 export const matchedAccounts = new Map<number, YNAB.Account>();
@@ -19,7 +20,7 @@ export async function syncTransactionsForAccount(params: SyncParams) {
   const ynabAccount = ynabAccountsByIban.get(bunqAccount.alias.find(alias => alias.type === 'IBAN')?.value!);
   if (!ynabAccount) throw new Error(`Could not find YNAB account for ${bunqAccount.description}`);
 
-  const transactions = await bunq.user.listAllPaymentForUserMonetaryAccount(bunq.userId, bunqAccount.id, { query: { count: 15 } } as any);
+  const transactions = await bunq.user.listAllPaymentForUserMonetaryAccount(bunq.userId, bunqAccount.id, { query: { count: params.numberOfTransactions || 15 } } as any);
   const mappedTxs = transactions.data.map(tx => mapBunqToYnabTransaction(tx.Payment, ynabAccount));
 
   const saveResponse = await ynab.transactions.createTransactions(ynabBudget.id, { transactions: mappedTxs });
